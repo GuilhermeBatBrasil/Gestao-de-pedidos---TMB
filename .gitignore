@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+bin/
+obj/
+
+# Build
+dist/
+build/
+*.dll
+*.exe
+*.pdb
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db

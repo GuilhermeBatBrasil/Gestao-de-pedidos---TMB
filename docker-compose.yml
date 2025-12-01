@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ordermanagement-postgres
+    environment:
+      POSTGRES_DB: ordermanagement
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ordermanagement-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ordermanagement-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - ordermanagement-network
+
+  api:
+    build:
+      context: ./backend/OrderManagement.API
+      dockerfile: Dockerfile
+    container_name: ordermanagement-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=ordermanagement;Username=postgres;Password=postgres
+      - AzureServiceBus__ConnectionString=${AZURE_SERVICEBUS_CONNECTION_STRING}
+      - AzureServiceBus__QueueName=orders
+    ports:
+      - "5000:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ordermanagement-network
+
+  worker:
+    build:
+      context: ./backend/OrderManagement.Worker
+      dockerfile: Dockerfile
+    container_name: ordermanagement-worker
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=ordermanagement;Username=postgres;Password=postgres
+      - AzureServiceBus__ConnectionString=${AZURE_SERVICEBUS_CONNECTION_STRING}
+      - AzureServiceBus__QueueName=orders
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - ordermanagement-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ordermanagement-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - ordermanagement-network
+
+networks:
+  ordermanagement-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
