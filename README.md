@@ -1,5 +1,13 @@
 # Sistema de Gestão de Pedidos
 
+![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)
+![Azure](https://img.shields.io/badge/Azure-Service%20Bus-0078D4?logo=microsoft-azure)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 Sistema completo de gestão de pedidos com arquitetura orientada a eventos, desenvolvido com .NET, React e Azure Service Bus.
 
 ## Índice
@@ -13,6 +21,9 @@ Sistema completo de gestão de pedidos com arquitetura orientada a eventos, dese
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Funcionalidades](#funcionalidades)
 - [Testes](#testes)
+- [Monitoramento](#monitoramento)
+- [Troubleshooting](#troubleshooting)
+- [Documentação Adicional](#documentação-adicional)
 
 ## Sobre o Projeto
 
@@ -92,17 +103,19 @@ Sistema de gestão de pedidos que implementa um fluxo completo de processamento 
 
 ## Pré-requisitos
 
-- [Docker](https://www.docker.com/get-started) e Docker Compose
-- [Conta Azure](https://azure.microsoft.com/free/) (gratuita com $200 de créditos)
+- [Docker](https://www.docker.com/get-started) (versão 20.10 ou superior) e Docker Compose (versão 2.0 ou superior)
+- [Conta Azure](https://azure.microsoft.com/free/) (gratuita com $200 de créditos para novos usuários)
 - Git
+- 4GB de RAM disponível (mínimo recomendado)
+- Portas disponíveis: 3000, 5000, 5432, 5050
 
 ## Instalação e Execução
 
 ### 1. Clone o Repositório
 
 ```bash
-git clone <seu-repositorio>
-cd tmb
+git clone https://github.com/GuilhermeBatBrasil/Gestao-de-pedidos---TMB.git
+cd Gestao-de-pedidos---TMB
 ```
 
 ### 2. Configure o Azure Service Bus
@@ -127,7 +140,7 @@ cd tmb
 cp .env.example .env
 
 # Edite o .env e cole sua connection string
-nano .env
+nano .env  # ou use seu editor preferido (vim, code, etc.)
 ```
 
 Exemplo de `.env`:
@@ -135,12 +148,27 @@ Exemplo de `.env`:
 AZURE_SERVICEBUS_CONNECTION_STRING=Endpoint=sb://sb-orders-dev.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=sua-chave-aqui
 ```
 
+**Importante**: 
+- O arquivo `.env` está no `.gitignore` e não será commitado
+- Nunca compartilhe sua connection string publicamente
+- Para produção, use Azure Key Vault ou similar
+
 ### 3. Inicie o Sistema
 
 ```bash
+# Torne os scripts executáveis (apenas primeira vez)
+chmod +x start.sh stop.sh
+
 # Inicia todos os serviços (API, Worker, Frontend, PostgreSQL)
 ./start.sh
 ```
+
+**Primeira execução**: Aguarde ~3-5 minutos para:
+- Download das imagens Docker
+- Build dos containers
+- Criação automática do banco de dados
+- Aplicação das migrations
+- Inicialização de todos os serviços
 
 ### 4. Acesse a Aplicação
 
@@ -154,6 +182,33 @@ AZURE_SERVICEBUS_CONNECTION_STRING=Endpoint=sb://sb-orders-dev.servicebus.window
 
 ```bash
 ./stop.sh
+```
+
+### 6. Comandos Úteis
+
+```bash
+# Ver status dos containers
+docker compose ps
+
+# Ver logs em tempo real
+docker compose logs -f
+
+# Ver logs de um serviço específico
+docker compose logs -f api
+docker compose logs -f worker
+docker compose logs -f frontend
+
+# Reconstruir um serviço após mudanças no código
+docker compose up --build api
+
+# Parar todos os containers
+docker compose down
+
+# Parar e remover volumes (limpa o banco de dados)
+docker compose down -v
+
+# Reiniciar um serviço específico
+docker compose restart api
 ```
 
 ## Endpoints da API
@@ -223,37 +278,69 @@ GET /api/orders/{id}
 | 1 | Processando | Worker está processando o pedido |
 | 2 | Finalizado | Pedido processado com sucesso |
 
-## � Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 .
 ├── backend/
 │   ├── OrderManagement.API/         # API REST
-│   │   ├── Controllers/             # Endpoints
+│   │   ├── Controllers/             # Endpoints REST
+│   │   │   └── OrdersController.cs
 │   │   ├── Data/                    # DbContext e Migrations
-│   │   ├── Models/                  # Entidades
+│   │   │   ├── OrderDbContext.cs
+│   │   │   └── Migrations/
+│   │   ├── Models/                  # Entidades e DTOs
+│   │   │   ├── Order.cs
+│   │   │   ├── OrderMessage.cs
+│   │   │   └── CreateOrderRequest.cs
 │   │   ├── Services/                # Service Bus Service
+│   │   │   ├── IServiceBusService.cs
+│   │   │   └── ServiceBusService.cs
+│   │   ├── appsettings.json
+│   │   ├── Dockerfile
 │   │   └── Program.cs
 │   │
 │   └── OrderManagement.Worker/      # Worker Assíncrono
 │       ├── Data/                    # DbContext
+│       │   └── OrderDbContext.cs
 │       ├── Models/                  # Entidades
+│       │   ├── Order.cs
+│       │   └── OrderMessage.cs
 │       ├── OrderProcessorWorker.cs  # Lógica de processamento
+│       ├── appsettings.json
+│       ├── Dockerfile
 │       └── Program.cs
 │
 ├── frontend/                        # Aplicação React
 │   ├── src/
 │   │   ├── components/              # Componentes reutilizáveis
+│   │   │   ├── Layout.tsx
+│   │   │   └── OrderTable.tsx
 │   │   ├── pages/                   # Páginas da aplicação
+│   │   │   ├── CreateOrder.tsx
+│   │   │   ├── OrderDetail.tsx
+│   │   │   └── OrderList.tsx
 │   │   ├── services/                # Integração com API
+│   │   │   └── orderService.ts
 │   │   ├── types/                   # TypeScript types
+│   │   │   └── order.ts
 │   │   └── utils/                   # Utilitários
+│   │       └── formatters.ts
+│   ├── public/                      # Assets estáticos
 │   ├── Dockerfile
-│   └── nginx.conf
+│   ├── nginx.conf
+│   ├── package.json
+│   └── tsconfig.json
 │
 ├── docs/                            # Documentação adicional
-├── docker-compose.yml               # Orquestração dos serviços
+│   ├── API.md                       # Documentação da API
+│   └── ARQUITETURA.md               # Documentação da arquitetura
+│
+├── logs/                            # Logs da aplicação (gitignored)
+├── .env                             # Variáveis de ambiente (gitignored)
 ├── .env.example                     # Exemplo de variáveis de ambiente
+├── .gitignore                       # Arquivos ignorados pelo Git
+├── docker-compose.yml               # Orquestração dos serviços
 ├── start.sh                         # Script para iniciar
 ├── stop.sh                          # Script para parar
 └── README.md                        # Este arquivo
@@ -262,39 +349,39 @@ GET /api/orders/{id}
 ## Funcionalidades
 
 ### Frontend
-- ✅ Listagem de pedidos em tabela responsiva
-- ✅ Criação de pedidos via formulário com validações
-- ✅ Visualização de detalhes do pedido
-- ✅ Auto-refresh a cada 5 segundos (lista) e 3 segundos (detalhes)
-- ✅ Feedback visual de status com cores
-- ✅ Formatação de valores monetários (pt-BR)
-- ✅ Formatação de datas (pt-BR)
+- Listagem de pedidos em tabela responsiva
+- Criação de pedidos via formulário com validações
+- Visualização de detalhes do pedido
+- Auto-refresh a cada 5 segundos (lista) e 3 segundos (detalhes)
+- Feedback visual de status com cores
+- Formatação de valores monetários (pt-BR)
+- Formatação de datas (pt-BR)
 
 ### Backend (API)
-- ✅ 3 endpoints REST (POST, GET, GET by ID)
-- ✅ Validação de dados de entrada
-- ✅ Persistência no PostgreSQL
-- ✅ Publicação de eventos no Azure Service Bus
-- ✅ Health checks (Database + Service Bus)
-- ✅ Migrations automáticas
-- ✅ CORS configurado
-- ✅ Swagger para documentação
+- 3 endpoints REST (POST, GET, GET by ID)
+- Validação de dados de entrada
+- Persistência no PostgreSQL
+- Publicação de eventos no Azure Service Bus
+- Health checks (Database + Service Bus)
+- Migrations automáticas
+- CORS configurado
+- Swagger para documentação
 
 ### Backend (Worker)
-- ✅ Processamento assíncrono de pedidos
-- ✅ Consumo de mensagens do Azure Service Bus
-- ✅ Idempotência (não processa a mesma mensagem duas vezes)
-- ✅ Fluxo: Pendente → Processando → Finalizado
-- ✅ Delay de 5 segundos (simulação de processamento)
-- ✅ Auto-complete de mensagens
-- ✅ Dead-letter para mensagens com erro
-- ✅ Health checks
+- Processamento assíncrono de pedidos
+- Consumo de mensagens do Azure Service Bus
+- Idempotência (não processa a mesma mensagem duas vezes)
+- Fluxo: Pendente → Processando → Finalizado
+- Delay de 5 segundos (simulação de processamento)
+- Auto-complete de mensagens
+- Dead-letter para mensagens com erro
+- Health checks
 
 ### Mensageria
-- ✅ CorrelationId = OrderId (rastreabilidade)
-- ✅ EventType = "OrderCreated"
-- ✅ Serialização JSON
-- ✅ Tratamento de erros
+- CorrelationId = OrderId (rastreabilidade)
+- EventType = "OrderCreated"
+- Serialização JSON
+- Tratamento de erros
 
 ## Testes
 
@@ -393,7 +480,15 @@ docker compose ps postgres
 
 # Reinicie a API
 docker compose restart api
+
+# Se persistir, reconstrua
+docker compose up --build api
 ```
+
+**Possíveis causas**:
+- PostgreSQL ainda não está pronto (aguarde o health check)
+- Connection string do Azure Service Bus inválida
+- Porta 5000 já está em uso
 
 ### Worker não processa mensagens
 
@@ -407,6 +502,12 @@ docker compose logs worker
 # Verifique se a fila existe no Azure Portal
 ```
 
+**Possíveis causas**:
+- Connection string incorreta no `.env`
+- Fila não criada no Azure Service Bus
+- Nome da fila diferente de "orders"
+- Problema de conectividade com o Azure
+
 ### Frontend não carrega
 
 ```bash
@@ -417,8 +518,34 @@ curl http://localhost:5000/health
 docker compose up --build frontend
 ```
 
-## Documentação Adicional
+**Possíveis causas**:
+- API não está rodando
+- Porta 3000 já está em uso
+- Erro de build do React
 
-- [Documentação da API](./docs/API.md)
-- [Frontend](./frontend/README.md)
+### Banco de dados não persiste dados
+
+```bash
+# Verifique se o volume existe
+docker volume ls | grep postgres
+
+# Se precisar resetar o banco
+docker compose down -v
+docker compose up -d
+```
+
+### Erro "port is already allocated"
+
+```bash
+# Descubra qual processo está usando a porta
+sudo lsof -i :5000  # ou :3000, :5432, :5050
+
+# Pare o processo ou mude a porta no docker-compose.yml
+```
+
+## Autor
+
+**Guilherme Brasil**
+- GitHub: [@GuilhermeBatBrasil](https://github.com/GuilhermeBatBrasil)
+- Email: guilhermebbrasill@gmail.com
 
